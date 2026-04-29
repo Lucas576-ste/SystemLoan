@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_ORIGIN = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const rawApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').trim()
+const apiUrlWithProtocol = /^https?:\/\//i.test(rawApiUrl) ? rawApiUrl : `https://${rawApiUrl}`
+const API_ORIGIN = apiUrlWithProtocol.replace(/\/+$/, '').replace(/\/api$/i, '')
 const API_BASE_URL = `${API_ORIGIN}/api`
 const TOKEN_KEY = 'systemloan_token'
 
