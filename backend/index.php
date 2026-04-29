@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-const ALLOWED_ORIGINS = [
+$allowed_origins = [
     'http://localhost:5173',
     'https://system-loan-gold.vercel.app',
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, ALLOWED_ORIGINS, true)) {
-    header("Access-Control-Allow-Origin: {$origin}");
+if (in_array($origin, $allowed_origins, true)) {
+    header("Access-Control-Allow-Origin: $origin");
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Credentials: true');
 }
-header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Access-Control-Max-Age: 86400');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit;
+    http_response_code(200);
+    exit();
 }
 
 require_once __DIR__ . '/vendor/autoload.php';
