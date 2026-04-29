@@ -13,10 +13,7 @@
             "App\\Models\\": "models/",
             "App\\Middleware\\": "middleware/",
             "App\\Helpers\\": "helpers/"
-        },
-        "classmap": [
-            "config/database.php"
-        ]
+        }
     },
     "config": {
         "audit": {
