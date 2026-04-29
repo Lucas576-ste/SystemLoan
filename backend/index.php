@@ -2,7 +2,15 @@
 
 declare(strict_types=1);
 
-header('Access-Control-Allow-Origin: http://localhost:5173');
+const ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'https://system-loan-gold.vercel.app',
+];
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, ALLOWED_ORIGINS, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Max-Age: 86400');

@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+!frontend/.env.development
+!frontend/.env.production
+
+node_modules/
+dist/
+build/
+
+vendor/
+
+.DS_Store
+Thumbs.db

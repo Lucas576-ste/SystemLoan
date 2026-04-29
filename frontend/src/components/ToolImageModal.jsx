@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
-const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '')
+const rawApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').trim()
+const apiUrlWithProtocol = /^https?:\/\//i.test(rawApiUrl) ? rawApiUrl : `https://${rawApiUrl}`
+const API_ORIGIN = apiUrlWithProtocol.replace(/\/+$/, '').replace(/\/api$/i, '')
 
 function normalizeImageUrls(tool) {
   if (!tool) return []
