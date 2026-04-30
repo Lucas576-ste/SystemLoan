@@ -12,7 +12,8 @@
             "App\\Controllers\\": "controllers/",
             "App\\Models\\": "models/",
             "App\\Middleware\\": "middleware/",
-            "App\\Helpers\\": "helpers/"
+            "App\\Helpers\\": "helpers/",
+            "App\\Config\\": "config/"
         }
     },
     "config": {
