@@ -10,100 +10,69 @@ use PDOException;
 final class Loan
 {
     public const RULE_TOOL_UNAVAILABLE = 'tool_unavailable';
-    public const RULE_BORROW_LIMIT_REACHED = 'borrow_limit_reached';
+    public const RULE_NOT_OWNER = 'not_owner';
 
-    public static function countActive(int $borrowerId): int
-    {
-        try {
-            $pdo = Database::getConnection();
-            $stmt = $pdo->prepare(
-                "SELECT COUNT(*)::int AS total
-                 FROM loans
-                 WHERE borrower_id = :borrower_id
-                   AND status = 'active'"
-            );
-            $stmt->execute(['borrower_id' => $borrowerId]);
-            $row = $stmt->fetch();
-
-            return is_array($row) ? (int) ($row['total'] ?? 0) : 0;
-        } catch (PDOException $e) {
-            throw new \RuntimeException('Erro interno', 0, $e);
-        }
-    }
-
-    public static function create(int $toolId, int $borrowerId): ?array
-    {
+    public static function create(
+        int $toolId,
+        int $ownerId,
+        string $borrowerName,
+        ?string $borrowerPhone,
+        string $returnDate,
+        ?int $borrowerId = null
+    ): ?array {
         $pdo = Database::getConnection();
 
         try {
             $pdo->beginTransaction();
 
-            $borrowerLockStmt = $pdo->prepare(
-                'SELECT id FROM users WHERE id = :borrower_id FOR UPDATE'
+            // Verifica propriedade e disponibilidade da ferramenta em uma unica query com lock
+            $toolStmt = $pdo->prepare(
+                'SELECT id, is_available FROM tools WHERE id = :tool_id AND user_id = :owner_id FOR UPDATE'
             );
-            $borrowerLockStmt->execute(['borrower_id' => $borrowerId]);
-            $borrower = $borrowerLockStmt->fetch();
-            if (!is_array($borrower)) {
+            $toolStmt->execute(['tool_id' => $toolId, 'owner_id' => $ownerId]);
+            $tool = $toolStmt->fetch();
+
+            if (!is_array($tool)) {
                 $pdo->rollBack();
-                return [ 'rule_violation' => self::RULE_BORROW_LIMIT_REACHED ];
+                return ['rule_violation' => self::RULE_NOT_OWNER];
             }
 
-            $toolStmt = $pdo->prepare(
-                'SELECT id, is_available
-                 FROM tools
-                 WHERE id = :tool_id
-                 FOR UPDATE'
-            );
-            $toolStmt->execute(['tool_id' => $toolId]);
-            $tool = $toolStmt->fetch();
-            if (!is_array($tool) || !((bool) $tool['is_available'])) {
+            if (!((bool) $tool['is_available'])) {
                 $pdo->rollBack();
                 return ['rule_violation' => self::RULE_TOOL_UNAVAILABLE];
             }
 
-            $activeCountStmt = $pdo->prepare(
-                "SELECT COUNT(*)::int AS total
-                 FROM loans
-                 WHERE borrower_id = :borrower_id
-                   AND status = 'active'"
-            );
-            $activeCountStmt->execute(['borrower_id' => $borrowerId]);
-            $activeCountRow = $activeCountStmt->fetch();
-            $activeCount = is_array($activeCountRow) ? (int) ($activeCountRow['total'] ?? 0) : 0;
-            if ($activeCount >= 3) {
-                $pdo->rollBack();
-                return ['rule_violation' => self::RULE_BORROW_LIMIT_REACHED];
-            }
-
             $loanStmt = $pdo->prepare(
-                "INSERT INTO loans (tool_id, borrower_id, status)
-                 VALUES (:tool_id, :borrower_id, 'active')
-                 RETURNING id, tool_id, borrower_id, status, loan_date, return_date, created_at, updated_at"
+                "INSERT INTO loans (tool_id, borrower_id, borrower_name, borrower_phone, status, return_date)
+                 VALUES (:tool_id, :borrower_id, :borrower_name, :borrower_phone, 'active', :return_date)
+                 RETURNING id, tool_id, borrower_id, borrower_name, borrower_phone, status, loan_date, return_date, created_at, updated_at"
             );
             $loanStmt->execute([
-                'tool_id' => $toolId,
-                'borrower_id' => $borrowerId,
+                'tool_id'        => $toolId,
+                'borrower_id'    => $borrowerId,
+                'borrower_name'  => $borrowerName,
+                'borrower_phone' => $borrowerPhone,
+                'return_date'    => $returnDate,
             ]);
             $loan = $loanStmt->fetch();
+
             if (!is_array($loan)) {
                 $pdo->rollBack();
                 return null;
             }
 
             $toolUpdateStmt = $pdo->prepare(
-                'UPDATE tools
-                 SET is_available = false,
-                     updated_at = CURRENT_TIMESTAMP
-                 WHERE id = :tool_id'
+                'UPDATE tools SET is_available = false, updated_at = CURRENT_TIMESTAMP WHERE id = :tool_id'
             );
             $toolUpdateStmt->execute(['tool_id' => $toolId]);
+
             if ($toolUpdateStmt->rowCount() !== 1) {
                 $pdo->rollBack();
                 return null;
             }
 
             $pdo->commit();
-            return $loan;
+            return self::normalizeRow($loan);
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -112,7 +81,7 @@ final class Loan
         }
     }
 
-    public static function findByBorrower(int $borrowerId): array
+    public static function findActiveByOwner(int $ownerId): array
     {
         try {
             $pdo = Database::getConnection();
@@ -120,79 +89,81 @@ final class Loan
                 "SELECT l.id,
                         l.tool_id,
                         l.borrower_id,
+                        l.borrower_name,
+                        l.borrower_phone,
                         l.status,
                         l.loan_date,
                         l.return_date,
                         t.name AS tool_name,
                         t.description AS tool_description,
-                        t.user_id AS owner_id,
-                        u.name AS owner_name
+                        t.user_id AS owner_id
                  FROM loans l
                  JOIN tools t ON t.id = l.tool_id
-                 JOIN users u ON u.id = t.user_id
-                 WHERE l.borrower_id = :borrower_id
+                 WHERE t.user_id = :owner_id
                    AND l.status = 'active'
                  ORDER BY l.loan_date DESC"
             );
-            $stmt->execute(['borrower_id' => $borrowerId]);
+            $stmt->execute(['owner_id' => $ownerId]);
             $loans = $stmt->fetchAll();
 
-            return is_array($loans) ? $loans : [];
+            if (!is_array($loans)) {
+                return [];
+            }
+
+            return array_map([self::class, 'normalizeRow'], $loans);
         } catch (PDOException $e) {
             throw new \RuntimeException('Erro interno', 0, $e);
         }
     }
 
-    public static function returnLoan(int $loanId, int $borrowerId): bool
+    public static function returnLoan(int $loanId, int $ownerId): bool
     {
         $pdo = Database::getConnection();
 
         try {
             $pdo->beginTransaction();
 
+            // Verifica que o emprestimo pertence a uma ferramenta do owner, com lock na linha do loan
             $loanStmt = $pdo->prepare(
-                "SELECT id, tool_id
-                 FROM loans
-                 WHERE id = :loan_id
-                   AND borrower_id = :borrower_id
-                   AND status = 'active'
-                 FOR UPDATE"
+                "SELECT l.id, l.tool_id
+                 FROM loans l
+                 JOIN tools t ON t.id = l.tool_id
+                 WHERE l.id = :loan_id
+                   AND t.user_id = :owner_id
+                   AND l.status = 'active'
+                 FOR UPDATE OF l"
             );
             $loanStmt->execute([
-                'loan_id' => $loanId,
-                'borrower_id' => $borrowerId,
+                'loan_id'  => $loanId,
+                'owner_id' => $ownerId,
             ]);
             $loan = $loanStmt->fetch();
+
             if (!is_array($loan)) {
                 $pdo->rollBack();
                 return false;
             }
 
+            // return_date nao e sobrescrito: mantém a data prevista de devolucao original
             $updateLoanStmt = $pdo->prepare(
                 "UPDATE loans
                  SET status = 'returned',
-                     return_date = CURRENT_TIMESTAMP,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = :loan_id
-                   AND borrower_id = :borrower_id
                    AND status = 'active'"
             );
-            $updateLoanStmt->execute([
-                'loan_id' => $loanId,
-                'borrower_id' => $borrowerId,
-            ]);
+            $updateLoanStmt->execute(['loan_id' => $loanId]);
+
             if ($updateLoanStmt->rowCount() !== 1) {
                 $pdo->rollBack();
                 return false;
             }
 
             $toolUpdateStmt = $pdo->prepare(
-                'UPDATE tools
-                 SET is_available = true,
-                     updated_at = CURRENT_TIMESTAMP
-                 WHERE id = :tool_id'
+                'UPDATE tools SET is_available = true, updated_at = CURRENT_TIMESTAMP WHERE id = :tool_id'
             );
             $toolUpdateStmt->execute(['tool_id' => (int) $loan['tool_id']]);
+
             if ($toolUpdateStmt->rowCount() !== 1) {
                 $pdo->rollBack();
                 return false;
@@ -208,19 +179,15 @@ final class Loan
         }
     }
 
-    public static function history(int $borrowerId, array $filters): array
+    public static function history(int $ownerId, array $filters): array
     {
         try {
             $pdo = Database::getConnection();
-            $borrowerEmail = self::findBorrowerEmail($pdo, $borrowerId);
-            if ($borrowerEmail === null) {
-                return [];
-            }
 
-            $sql = 'SELECT loan_id, tool_name, tool_description, borrower_name, borrower_email, status, loan_date, return_date
+            $sql = 'SELECT loan_id, tool_name, tool_description, borrower_name, borrower_phone, status, loan_date, return_date
                     FROM loan_history
-                    WHERE borrower_email = :borrower_email';
-            $params = ['borrower_email' => $borrowerEmail];
+                    WHERE owner_id = :owner_id';
+            $params = ['owner_id' => $ownerId];
 
             if (isset($filters['status']) && $filters['status'] !== '') {
                 $sql .= ' AND status = :status';
@@ -248,27 +215,21 @@ final class Loan
             $stmt->execute($params);
             $history = $stmt->fetchAll();
 
-            return is_array($history) ? $history : [];
+            if (!is_array($history)) {
+                return [];
+            }
+
+            return array_map([self::class, 'normalizeRow'], $history);
         } catch (PDOException $e) {
             throw new \RuntimeException('Erro interno', 0, $e);
         }
     }
 
-    private static function findBorrowerEmail(\PDO $pdo, int $borrowerId): ?string
+    private static function normalizeRow(array $row): array
     {
-        $stmt = $pdo->prepare(
-            'SELECT email
-             FROM users
-             WHERE id = :id
-             LIMIT 1'
-        );
-        $stmt->execute(['id' => $borrowerId]);
-        $row = $stmt->fetch();
-        if (!is_array($row)) {
-            return null;
-        }
-
-        $email = (string) ($row['email'] ?? '');
-        return $email === '' ? null : $email;
+        $isActive = ($row['status'] ?? '') === 'active';
+        $returnDate = $row['return_date'] ?? '';
+        $row['is_overdue'] = $isActive && $returnDate !== '' && strtotime((string) $returnDate) < time();
+        return $row;
     }
 }

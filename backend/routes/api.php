@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Controllers\AuthController;
 use App\Controllers\LoanController;
+use App\Controllers\NotificationController;
 use App\Controllers\ToolController;
 use App\Middleware\AuthMiddleware;
 use App\Models\User;
@@ -61,6 +62,7 @@ if ($method === 'GET' && $path === '/me') {
 
 $toolController = new ToolController();
 $loanController = new LoanController();
+$notificationController = new NotificationController();
 
 if ($method === 'GET' && $path === '/tools') {
     $toolController->index();
@@ -109,6 +111,16 @@ if ($method === 'POST' && $path === '/loans') {
 
 if ($method === 'PATCH' && preg_match('#^/loans/([0-9]+)/return$#', $path, $matches) === 1) {
     $loanController->returnLoan((int) $matches[1]);
+    exit;
+}
+
+if ($method === 'GET' && $path === '/notifications') {
+    $notificationController->index();
+    exit;
+}
+
+if ($method === 'PATCH' && preg_match('#^/notifications/([0-9]+)/read$#', $path, $matches) === 1) {
+    $notificationController->markRead((int) $matches[1]);
     exit;
 }
 

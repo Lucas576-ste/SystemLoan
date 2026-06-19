@@ -6,31 +6,14 @@ const API_ORIGIN = apiUrlWithProtocol.replace(/\/+$/, '').replace(/\/api$/i, '')
 
 function normalizeImageUrls(tool) {
   if (!tool) return []
-  const fromUrls = tool.image_urls
-  if (Array.isArray(fromUrls)) {
-    return fromUrls
-      .filter((u) => typeof u === 'string' && u.trim() !== '')
-      .map((u) => (u.startsWith('/uploads/') ? `${API_ORIGIN}${u}` : u))
-  }
-  const fromImages = tool.images
-  if (Array.isArray(fromImages)) {
-    return fromImages
-      .filter((u) => typeof u === 'string' && u.trim() !== '')
-      .map((u) => (u.startsWith('/uploads/') ? `${API_ORIGIN}${u}` : u))
-  }
-  return []
+  const urls = Array.isArray(tool.image_urls) ? tool.image_urls : (Array.isArray(tool.images) ? tool.images : [])
+  return urls
+    .filter((u) => typeof u === 'string' && u.trim() !== '')
+    .map((u) => (u.startsWith('/uploads/') ? `${API_ORIGIN}${u}` : u))
 }
 
-export default function ToolImageModal({
-  open,
-  onClose,
-  tool,
-  available,
-  borrowing,
-  onBorrow,
-}) {
+export default function ToolImageModal({ open, onClose, tool }) {
   const [index, setIndex] = useState(0)
-  const [shareHint, setShareHint] = useState('')
 
   const name = tool?.name ?? 'Ferramenta'
   const imageUrls = normalizeImageUrls(tool)
@@ -47,7 +30,10 @@ export default function ToolImageModal({
   }, [count])
 
   useEffect(() => {
-    if (!open) return undefined
+    if (!open) {
+      setIndex(0)
+      return undefined
+    }
     const onKey = (e) => {
       if (e.key === 'Escape') onClose()
       if (e.key === 'ArrowLeft') goPrev()
@@ -61,33 +47,7 @@ export default function ToolImageModal({
     if (e.target === e.currentTarget) onClose()
   }
 
-  const handleShare = async () => {
-    const text = `Ferramenta: ${name}`
-    const url = typeof window !== 'undefined' ? window.location.href : ''
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: name, text, url })
-        setShareHint('')
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(`${text}\n${url}`)
-        setShareHint('Link copiado para a área de transferência.')
-        setTimeout(() => setShareHint(''), 2500)
-      }
-    } catch (err) {
-      if (err?.name === 'AbortError') return
-      setShareHint('Não foi possível compartilhar.')
-      setTimeout(() => setShareHint(''), 2500)
-    }
-  }
-
-  const handleBorrowClick = async () => {
-    if (!tool?.id || !onBorrow) return
-    await onBorrow(tool.id)
-  }
-
   if (!open || !tool) return null
-
-  const titleId = 'tool-image-modal-title'
 
   return (
     <div
@@ -99,12 +59,12 @@ export default function ToolImageModal({
         className="tool-image-modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby={titleId}
+        aria-labelledby="img-modal-title"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="tool-image-modal-header">
-          <h2 id={titleId} className="tool-image-modal-title">
-            Imagens da {name}
+          <h2 id="img-modal-title" className="tool-image-modal-title">
+            {name}
           </h2>
           <button
             type="button"
@@ -118,9 +78,7 @@ export default function ToolImageModal({
 
         <div className="tool-image-modal-body">
           {count === 0 ? (
-            <p className="tool-image-modal-empty muted">
-              Nenhuma imagem cadastrada para esta ferramenta.
-            </p>
+            <p className="tool-image-modal-empty">Nenhuma imagem cadastrada.</p>
           ) : (
             <div className="tool-image-carousel">
               <div className="tool-image-carousel-viewport">
@@ -170,22 +128,11 @@ export default function ToolImageModal({
           )}
         </div>
 
-        <footer className="tool-image-modal-footer">
-          {shareHint ? <p className="tool-image-modal-hint">{shareHint}</p> : null}
-          <div className="tool-image-modal-actions">
-            <button type="button" className="btn-tool-modal-secondary" onClick={handleShare}>
-              Compartilhar
-            </button>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleBorrowClick}
-              disabled={!available || borrowing}
-            >
-              {borrowing ? 'Emprestando...' : 'Emprestar'}
-            </button>
-          </div>
-        </footer>
+        <div className="tool-image-modal-footer">
+          <button type="button" className="btn-secondary btn-sm" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
       </section>
     </div>
   )

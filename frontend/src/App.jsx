@@ -4,6 +4,7 @@ import PrivateRoute from './components/PrivateRoute'
 import Dashboard from './pages/Dashboard'
 import History from './pages/History'
 import Login from './pages/Login'
+import Notifications from './pages/Notifications'
 import Register from './pages/Register'
 
 function App() {
@@ -21,13 +22,9 @@ function App() {
       >
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/history" element={<History />} />
+        <Route path="/notifications" element={<Notifications />} />
       </Route>
-      <Route
-        path="*"
-        element={
-          <Navigate to="/dashboard" replace />
-        }
-      />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

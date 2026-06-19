@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Middleware\AuthMiddleware;
 use App\Models\Loan;
+use App\Models\Notification;
 use Throwable;
 
 final class LoanController
@@ -36,8 +37,43 @@ final class LoanController
             return;
         }
 
+        $borrowerName = trim((string) ($input['borrower_name'] ?? ''));
+        if ($borrowerName === '') {
+            self::respond(400, ['error' => 'borrower_name é obrigatório']);
+            return;
+        }
+        if (mb_strlen($borrowerName) > 255) {
+            self::respond(400, ['error' => 'borrower_name deve ter no máximo 255 caracteres']);
+            return;
+        }
+
+        $borrowerPhone = trim((string) ($input['borrower_phone'] ?? ''));
+        $borrowerPhone = $borrowerPhone === '' ? null : $borrowerPhone;
+        if ($borrowerPhone !== null && mb_strlen($borrowerPhone) > 20) {
+            self::respond(400, ['error' => 'borrower_phone deve ter no máximo 20 caracteres']);
+            return;
+        }
+
+        $returnDateRaw = trim((string) ($input['return_date'] ?? ''));
+        if ($returnDateRaw === '') {
+            self::respond(400, ['error' => 'return_date é obrigatório']);
+            return;
+        }
+        $returnDate = self::normalizeDateFilter($returnDateRaw, false);
+        if ($returnDate === null) {
+            self::respond(400, ['error' => 'Formato de return_date inválido. Use YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS']);
+            return;
+        }
+
         try {
-            $loan = Loan::create((int) $toolIdRaw, (int) $payload->sub);
+            $loan = Loan::create(
+                (int) $toolIdRaw,
+                (int) $payload->sub,
+                $borrowerName,
+                $borrowerPhone,
+                $returnDate
+            );
+
             if ($loan === null) {
                 self::respond(500, ['error' => 'Erro interno']);
                 return;
@@ -49,9 +85,21 @@ final class LoanController
                 return;
             }
 
-            if ($ruleViolation === Loan::RULE_BORROW_LIMIT_REACHED) {
-                self::respond(422, ['error' => 'Limite de 3 empréstimos ativos atingido']);
+            if ($ruleViolation === Loan::RULE_NOT_OWNER) {
+                self::respond(403, ['error' => 'Ferramenta não encontrada ou você não é o proprietário']);
                 return;
+            }
+
+            // Notificacao best-effort: falha aqui nao reverte o emprestimo ja confirmado
+            try {
+                Notification::createForLoan(
+                    (int) $payload->sub,
+                    (int) $loan['id'],
+                    $borrowerName,
+                    $returnDate
+                );
+            } catch (Throwable) {
+                // Falha silenciosa
             }
 
             self::respond(201, $loan);
@@ -68,7 +116,7 @@ final class LoanController
         }
 
         try {
-            self::respond(200, Loan::findByBorrower((int) $payload->sub));
+            self::respond(200, Loan::findActiveByOwner((int) $payload->sub));
         } catch (Throwable) {
             self::respond(500, ['error' => 'Erro interno']);
         }

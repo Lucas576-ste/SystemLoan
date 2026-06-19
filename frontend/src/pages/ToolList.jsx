@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
+import LoanModal from '../components/LoanModal'
 import ToolImageModal from '../components/ToolImageModal'
+import { useAuth } from '../hooks/useAuth'
 import api from '../services/api'
 
-function isToolAvailable(value) {
+function isAvailable(value) {
   return value === true || value === 1 || value === '1' || value === 't' || value === 'true'
 }
 
 function ToolList() {
+  const { user } = useAuth()
   const [tools, setTools] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [submittingId, setSubmittingId] = useState(null)
-  const [modalTool, setModalTool] = useState(null)
+  const [imageTool, setImageTool] = useState(null)
+  const [loanTool, setLoanTool] = useState(null)
 
   const fetchTools = async () => {
     try {
@@ -30,17 +33,9 @@ function ToolList() {
     fetchTools()
   }, [])
 
-  const handleBorrow = async (toolId) => {
-    try {
-      setSubmittingId(toolId)
-      await api.post('/loans', { tool_id: toolId })
-      await fetchTools()
-      setModalTool((prev) => (prev?.id === toolId ? null : prev))
-    } catch (err) {
-      setError(err?.response?.data?.error ?? 'Não foi possível realizar o empréstimo.')
-    } finally {
-      setSubmittingId(null)
-    }
+  const handleLoanSuccess = () => {
+    setLoanTool(null)
+    fetchTools()
   }
 
   if (loading) return <p className="muted">Carregando ferramentas...</p>
@@ -48,21 +43,30 @@ function ToolList() {
   return (
     <section>
       <ToolImageModal
-        key={modalTool?.id ?? 'tool-modal'}
-        open={Boolean(modalTool)}
-        onClose={() => setModalTool(null)}
-        tool={modalTool}
-        available={modalTool ? isToolAvailable(modalTool.is_available) : false}
-        borrowing={modalTool ? submittingId === modalTool.id : false}
-        onBorrow={handleBorrow}
+        open={Boolean(imageTool)}
+        onClose={() => setImageTool(null)}
+        tool={imageTool}
       />
+
+      {loanTool ? (
+        <LoanModal
+          tool={loanTool}
+          onClose={() => setLoanTool(null)}
+          onSuccess={handleLoanSuccess}
+        />
+      ) : null}
+
       {error ? <p className="alert-error">{error}</p> : null}
+
       {tools.length === 0 ? (
         <p className="muted">Nenhuma ferramenta cadastrada.</p>
       ) : (
         <div className="grid-list">
           {tools.map((tool) => {
-            const available = isToolAvailable(tool.is_available)
+            const available = isAvailable(tool.is_available)
+            const isOwner = parseInt(tool.user_id) === parseInt(user?.id)
+            const hasImages = Array.isArray(tool.image_urls) && tool.image_urls.length > 0
+
             return (
               <article key={tool.id} className="item-card">
                 <div className="item-header">
@@ -75,22 +79,26 @@ function ToolList() {
                 <p className="item-desc">{tool.description || 'Sem descrição'}</p>
                 <p className="item-meta">Dono: {tool.owner_name}</p>
 
-                <button
-                  type="button"
-                  className="tool-card-link"
-                  onClick={() => setModalTool(tool)}
-                >
-                  Visualizar imagem
-                </button>
+                {hasImages ? (
+                  <button
+                    type="button"
+                    className="tool-card-link"
+                    onClick={() => setImageTool(tool)}
+                  >
+                    Ver imagens ({tool.image_urls.length})
+                  </button>
+                ) : null}
 
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => handleBorrow(tool.id)}
-                  disabled={!available || submittingId === tool.id}
-                >
-                  {submittingId === tool.id ? 'Emprestando...' : 'Emprestar'}
-                </button>
+                {isOwner ? (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => setLoanTool(tool)}
+                    disabled={!available}
+                  >
+                    Emprestar
+                  </button>
+                ) : null}
               </article>
             )
           })}

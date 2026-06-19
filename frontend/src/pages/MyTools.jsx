@@ -4,6 +4,10 @@ import api from '../services/api'
 const initialForm = { name: '', description: '' }
 const MAX_IMAGES = 4
 
+function isAvailable(value) {
+  return value === true || value === 1 || value === '1' || value === 't' || value === 'true'
+}
+
 function MyTools() {
   const [tools, setTools] = useState([])
   const [loading, setLoading] = useState(true)
@@ -60,7 +64,6 @@ function MyTools() {
       setSelectedFiles([])
       return
     }
-
     setError('')
     setSelectedFiles(files)
   }
@@ -85,9 +88,7 @@ function MyTools() {
       const formData = new FormData()
       formData.append('name', name)
       formData.append('description', description)
-      selectedFiles.forEach((file) => {
-        formData.append('images[]', file)
-      })
+      selectedFiles.forEach((file) => formData.append('images[]', file))
 
       if (editingToolId) {
         await api.post(`/tools/${editingToolId}`, formData)
@@ -105,8 +106,7 @@ function MyTools() {
   }
 
   const handleDelete = async (toolId) => {
-    const confirmed = window.confirm('Deseja realmente excluir esta ferramenta?')
-    if (!confirmed) return
+    if (!window.confirm('Deseja realmente excluir esta ferramenta?')) return
 
     try {
       await api.delete(`/tools/${toolId}`)
@@ -132,71 +132,102 @@ function MyTools() {
         <p className="muted">Você ainda não cadastrou ferramentas.</p>
       ) : (
         <div className="grid-list">
-          {tools.map((tool) => (
-            <article key={tool.id} className="item-card">
-              <h3>{tool.name}</h3>
-              <p className="item-desc">{tool.description || 'Sem descrição'}</p>
+          {tools.map((tool) => {
+            const available = isAvailable(tool.is_available)
+            return (
+              <article key={tool.id} className="item-card">
+                <div className="item-header">
+                  <h3>{tool.name}</h3>
+                  <span className={available ? 'status-pill ok' : 'status-pill off'}>
+                    {available ? 'Disponível' : 'Emprestada'}
+                  </span>
+                </div>
 
-              <div className="inline-actions">
-                <button type="button" className="btn-secondary btn-sm" onClick={() => openEditModal(tool)}>
-                  Editar
-                </button>
-                <button type="button" className="btn-danger btn-sm" onClick={() => handleDelete(tool.id)}>
-                  Excluir
-                </button>
-              </div>
-            </article>
-          ))}
+                <p className="item-desc">{tool.description || 'Sem descrição'}</p>
+
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    onClick={() => openEditModal(tool)}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-danger btn-sm"
+                    onClick={() => handleDelete(tool.id)}
+                  >
+                    Excluir
+                  </button>
+                </div>
+              </article>
+            )
+          })}
         </div>
       )}
 
       {isModalOpen ? (
         <div className="modal-backdrop" role="presentation">
           <section className="modal-card" role="dialog" aria-modal="true">
-            <h3>{editingToolId ? 'Editar ferramenta' : 'Nova ferramenta'}</h3>
-
-            <form className="auth-form" onSubmit={handleSubmit}>
-              <label className="form-group">
-                <span>Nome</span>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                />
-              </label>
-
-              <label className="form-group">
-                <span>Descrição</span>
-                <input
-                  type="text"
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                />
-              </label>
-
-              <label className="form-group">
-                <span>Imagens (até 4)</span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  onChange={handleImagesChange}
-                />
-              </label>
-
-              {selectedFiles.length > 0 ? (
-                <p className="item-meta">{selectedFiles.length} imagem(ns) selecionada(s).</p>
-              ) : null}
-
-              <div className="inline-actions">
-                <button type="button" className="btn-secondary" onClick={closeModal}>
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? 'Salvando...' : 'Salvar'}
-                </button>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {editingToolId ? 'Editar ferramenta' : 'Nova ferramenta'}
+                </h3>
               </div>
-            </form>
+              <button type="button" className="modal-close-btn" onClick={closeModal} aria-label="Fechar">
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <form className="auth-form" onSubmit={handleSubmit}>
+                <label className="form-group">
+                  <span>Nome <span className="required">*</span></span>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                    autoFocus
+                  />
+                </label>
+
+                <label className="form-group">
+                  <span>Descrição</span>
+                  <input
+                    type="text"
+                    value={form.description}
+                    onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                  />
+                </label>
+
+                <label className="form-group">
+                  <span>Imagens (até 4)</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    onChange={handleImagesChange}
+                  />
+                </label>
+
+                {selectedFiles.length > 0 ? (
+                  <p className="item-meta">{selectedFiles.length} imagem(ns) selecionada(s).</p>
+                ) : null}
+
+                {error ? <p className="alert-error">{error}</p> : null}
+
+                <div className="inline-actions">
+                  <button type="button" className="btn-secondary" onClick={closeModal}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={submitting}>
+                    {submitting ? 'Salvando...' : 'Salvar'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </section>
         </div>
       ) : null}
