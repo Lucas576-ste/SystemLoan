@@ -7,7 +7,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 // Avoid hard failure in environments that inject vars without a .env file.
 Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
 
-$allowedOriginsFromEnv = $_ENV['ALLOWED_ORIGINS'] ?? '';
+$allowedOriginsFromEnv = $_ENV['ALLOWED_ORIGINS'] ?? getenv('ALLOWED_ORIGINS') ?? '';
 $allowed_origins = array_values(array_filter(array_map(
     static fn(string $origin): string => trim($origin),
     explode(',', $allowedOriginsFromEnv)
