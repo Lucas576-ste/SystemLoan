@@ -11,11 +11,11 @@ final class Database
 {
     public static function getConnection(): PDO
     {
-        $host = $_ENV['DB_HOST'] ?? 'localhost';
-        $port = $_ENV['DB_PORT'] ?? '5432';
-        $dbname = $_ENV['DB_NAME'] ?? 'systemloan';
-        $user = $_ENV['DB_USER'] ?? 'postgres';
-        $pass = $_ENV['DB_PASS'] ?? '1234';
+        $host = $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?? 'localhost';
+        $port = $_ENV['DB_PORT'] ?? getenv('DB_PORT') ?? '5432';
+        $dbname = $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?? 'systemloan';
+        $user = $_ENV['DB_USER'] ?? getenv('DB_USER') ?? 'postgres';
+        $pass = $_ENV['DB_PASS'] ?? getenv('DB_PASS') ?? '';
 
         $dsn = sprintf(
             'pgsql:host=%s;port=%s;dbname=%s',
