@@ -52,7 +52,15 @@ final class AuthController
         $newUser = User::create($name, $email, $hashedPassword);
 
         if ($newUser === null) {
-            self::respond(400, ['error' => 'Não foi possível criar usuário']);
+            // TODO: remover debug após identificar o erro no Render
+            $debugInfo = [
+                'db_host' => $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?? 'não definido',
+                'db_port' => $_ENV['DB_PORT'] ?? getenv('DB_PORT') ?? 'não definido',
+                'db_name' => $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?? 'não definido',
+                'db_user' => $_ENV['DB_USER'] ?? getenv('DB_USER') ?? 'não definido',
+            ];
+            error_log('[AuthController::register] User::create retornou null. DB config: ' . json_encode($debugInfo));
+            self::respond(500, ['error' => 'Não foi possível criar usuário', 'debug' => $debugInfo]);
             return;
         }
 

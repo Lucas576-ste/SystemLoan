@@ -20,7 +20,8 @@ final class User
             $user = $stmt->fetch();
 
             return is_array($user) ? $user : null;
-        } catch (PDOException) {
+        } catch (PDOException $e) {
+            error_log('[User::findByEmail] PDOException: ' . $e->getMessage());
             return null;
         }
     }
@@ -40,7 +41,8 @@ final class User
             $user = $stmt->fetch();
 
             return is_array($user) ? $user : null;
-        } catch (PDOException) {
+        } catch (PDOException $e) {
+            error_log('[User::create] PDOException: ' . $e->getMessage());
             return null;
         }
     }
@@ -56,7 +58,8 @@ final class User
             $user = $stmt->fetch();
 
             return is_array($user) ? $user : null;
-        } catch (PDOException) {
+        } catch (PDOException $e) {
+            error_log('[User::findById] PDOException: ' . $e->getMessage());
             return null;
         }
     }
